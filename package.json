@@ -1,0 +1,36 @@
+{
+  "name": "kdp-studio-library",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "//": "sharp ships one prebuilt binary per platform via optionalDependencies. Without this, pnpm only installs the platform-specific binary the *lockfile-generating* machine needs \u2014 so a lockfile generated on macOS installs sharp-darwin-arm64 and nothing else, and Vercel's linux-x64 build then boots with sharp having no binary it can load. Forcing pnpm to always fetch both binaries makes the same lockfile work on both.",
+    "supportedArchitectures": {
+      "os": [
+        "current",
+        "linux"
+      ],
+      "cpu": [
+        "current",
+        "x64",
+        "arm64"
+      ]
+    }
+  },
+  "scripts": {
+    "dev": "pnpm --filter @kdp/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:generate": "pnpm --filter @kdp/db generate",
+    "db:migrate": "pnpm --filter @kdp/db migrate",
+    "art:build": "node scripts/build-art-pack.mjs"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "typescript": "^5.9.3",
+    "sharp": "^0.33.5"
+  }
+}

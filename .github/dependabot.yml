@@ -1,0 +1,56 @@
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+
+    # Minor and patch bumps travel together; every major comes on its own.
+    #
+    # This used to be one group matching "*", so a single week's updates
+    # arrived as one PR carrying twelve packages — and PR #53 is what that
+    # costs. TypeScript 7 broke the lint step, ESLint 10 broke it again a
+    # different way, and svix 2 broke the build; the nine harmless bumps in
+    # the same commit (AWS SDK, Clerk, Upstash, sharp, prettier) could not
+    # be merged either, because they were welded to the three that failed.
+    #
+    # A major version is where the breaking change lives by definition, so
+    # each one is judged alone: its PR goes red on its own and blocks
+    # nothing else. Minor and patch stay grouped, because those are the
+    # ones that are nearly always safe and batching them keeps the review
+    # cost down.
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+    ignore:
+      # Held because the ECOSYSTEM cannot take them yet, not because we
+      # don't want them. Delete the entry once the note stops being true —
+      # and check, rather than assuming it still holds.
+      #
+      # typescript 7.x: typescript-eslint refuses to load against the TS 7
+      # API ("typescript-eslint does not support TS 7.0"), which kills
+      # `pnpm --filter @kdp/web lint`, and @types/node stops resolving
+      # under it, which kills the generator's typecheck with 25 errors
+      # about Buffer, process and node: imports. Both are upstream work:
+      # https://github.com/typescript-eslint/typescript-eslint/issues/10940
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+      # eslint 10.x: eslint-config-next 16.3.4 pins eslint-plugin-react
+      # 7.37.5, which calls context.getFilename() — removed in ESLint 10 —
+      # so linting dies with "contextOrFilename.getFilename is not a
+      # function" before it reads a single source file. Unblocked when
+      # eslint-config-next ships a plugin set built for ESLint 10.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

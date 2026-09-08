@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: toggled by ThemeToggle, applied before paint by
+   the inline script in layout.tsx to avoid a flash of the wrong theme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --background: #fafafa;
+  --foreground: #18181b;
+  --surface: #ffffff;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --border: #e4e4e7;
+  --accent: #18181b;
+  --accent-foreground: #fafafa;
+  --success: #15803d;
+  --danger: #b91c1c;
+  --radius: 0.625rem;
+  /* The press "state layer" — a tint overlaid on a button/link the instant
+     it's touched, on top of whatever color it already is (solid, outlined,
+     or transparent) rather than washing it out with opacity. Dark tint on
+     light backgrounds, so it reads as "physically pressed in," not faded. */
+  --press-overlay: rgb(0 0 0 / 8%);
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --surface: #151517;
+  --muted: #232326;
+  --muted-foreground: #a1a1aa;
+  --border: #2a2a2e;
+  --accent: #fafafa;
+  --accent-foreground: #18181b;
+  --success: #4ade80;
+  --danger: #f87171;
+  /* Light tint in dark mode — same "pressed in" read against a dark button. */
+  --press-overlay: rgb(255 255 255 / 12%);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-danger: var(--danger);
+  --radius-md: var(--radius);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@layer base {
+  /* Every clickable control gets instant, visible feedback the moment
+     it's pressed, not just on release. `:hover` alone — which is what most
+     buttons/links in this app relied on for a visual response — doesn't
+     fire reliably (or at all) on a touchscreen, so on a phone a tap gave
+     no feedback whatsoever until whatever it triggered (a navigation, a
+     form submit) finished on its own; it just felt unresponsive. `:active`
+     fires immediately on press on every input type, touch included.
+     Layered under `base` (not left bare) so a component's own explicit
+     hover/active utility classes — which live in Tailwind's `utilities`
+     layer — still win when a component wants something different.
+
+     Buttons get a "state layer" (an inset tint, see --press-overlay) plus a
+     slight squish — the same physical-feeling press pattern used by native
+     app buttons and Material/iOS design systems, deliberately not a flat
+     opacity fade, which reads as the control going faint/disabled rather
+     than being pressed. The tint sits on top of the button's own
+     background (solid, outlined, or transparent) via box-shadow, so it
+     never washes out the label text sitting above it. Plain text links
+     stay a simple opacity dim — the familiar link-press feel, and a squish
+     would look broken on inline text. */
+  button:not(:disabled),
+  a,
+  [role="button"]:not([aria-disabled="true"]) {
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      box-shadow 0.1s ease,
+      transform 0.1s ease,
+      opacity 0.1s ease;
+  }
+
+  button:not(:disabled):active,
+  [role="button"]:not([aria-disabled="true"]):active {
+    transform: scale(0.97);
+    box-shadow: inset 0 0 0 999px var(--press-overlay);
+  }
+
+  a:active {
+    opacity: 0.65;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    button:active,
+    [role="button"]:active {
+      transform: none;
+    }
+  }
+}
+
+/*
+ * The primary-CTA button style (Tailwind's `bg-accent` + `text-accent-foreground`
+ * — "Generate book", "Sign in", "New book", etc.) sits at the theme's most
+ * extreme lightness by design: near-black in light mode, near-white in dark
+ * mode. --press-overlay tints *toward* black in light mode and *toward*
+ * white in dark mode — correct for every other button (their background is
+ * already mid-toned, so the tint reads clearly), but invisible here: it's
+ * mixing more black into an already near-black button, or more white into
+ * an already near-white one. Mixing in a slice of the button's own
+ * `accent-foreground` instead always shifts it toward the visible,
+ * readable direction in *both* themes, since accent-foreground is already
+ * guaranteed to be accent's high-contrast opposite — no separate light/dark
+ * logic needed.
+ *
+ * Deliberately unlayered (not inside @layer base) so it reliably wins over
+ * Tailwind's own `.bg-accent` utility (which lives in the higher-priority
+ * `utilities` layer and would otherwise keep painting the un-pressed color
+ * even while this element matches `:active` too) — cascade layers rank by
+ * layer first, specificity only breaks ties within the same layer.
+ */
+.bg-accent:active {
+  background-color: color-mix(in srgb, var(--accent) 80%, var(--accent-foreground) 20%);
+}
+
+/* Navigation feedback.
+   The jump box refuses a non-numeric entry rather than explaining it —
+   a shake is the whole message, and it's over before it can annoy. The
+   pulse marks the card a jump landed on, so a reader who typed 85 can
+   see WHICH of the five on screen they asked for. Both are motion-only
+   affordances, so both stand down for anyone who's asked for less of it. */
+@keyframes kdp-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+.kdp-shake { animation: kdp-shake 0.3s ease-in-out; }
+
+@keyframes kdp-pulse {
+  0% { box-shadow: 0 0 0 0 var(--kdp-pulse-color, rgb(99 102 241 / 0.55)); }
+  100% { box-shadow: 0 0 0 12px rgb(99 102 241 / 0); }
+}
+.kdp-pulse { animation: kdp-pulse 1s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kdp-shake,
+  .kdp-pulse { animation: none; }
+}

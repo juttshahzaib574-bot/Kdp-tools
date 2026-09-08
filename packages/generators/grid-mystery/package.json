@@ -1,0 +1,33 @@
+{
+  "name": "@kdp/generator-grid-mystery",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@kdp/shared": "workspace:*",
+    "@pdf-lib/fontkit": "^1.1.1",
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.4"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./src/node-fonts.ts",
+    "./text": "./src/text-template.ts",
+    "./package.json": "./package.json",
+    "./node-art": "./src/node-art.ts"
+  },
+  "files": [
+    "src",
+    "assets"
+  ]
+}
