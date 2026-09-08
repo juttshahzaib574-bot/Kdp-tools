@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.679.0",
+    "@aws-sdk/client-s3": "^3.1127.0",
     "@kdp/db": "workspace:*",
     "@kdp/generator-grid-mystery": "workspace:*",
     "@kdp/shared": "workspace:*"
