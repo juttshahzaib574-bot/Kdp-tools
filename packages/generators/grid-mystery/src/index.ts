@@ -116,3 +116,17 @@ export {
   type PropEntry,
 } from "./art";
 export { embedPuzzleArt, type PuzzleArt } from "./art-embed";
+export {
+  buildWalkthrough,
+  formatWalkthrough,
+  walkthroughToJson,
+  type SolutionWalkthrough,
+  type WalkthroughStep,
+} from "./walkthrough";
+
+export {
+  generateHintLadder,
+  generateBookHintLadder,
+  type PuzzleHintLadder,
+  type BookHintLadder,
+} from "./hint-ladder";

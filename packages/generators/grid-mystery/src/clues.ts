@@ -25,11 +25,24 @@ import {
   STRONG_HEIGHT,
   STRONG_SAME_ROOM,
   phrase,
+  // Conditional clue templates
+  CONDITIONAL_IF_ROOM_THEN_ROW,
+  CONDITIONAL_IF_ADJACENT_THEN_COLUMN,
+  CONDITIONAL_IF_HEIGHT_THEN_POSITION,
 } from "./phrasings";
 import { type Rng, randInt, shuffle } from "./rng";
 import type { ClueConstraint } from "./solve";
 import { countSolutions, SolverBudgetExceededError } from "./solve";
-import { techniqueRank, type SolvableInput } from "./technique-solver";
+import {
+  techniqueRank,
+  type SolvableInput,
+  sumCandidateCounts,
+  propagate,
+  copyCandidates,
+  structureClues,
+  buildEvidenceState,
+  TECHNIQUES,
+} from "./technique-solver";
 import { TIER_CONTRACT, gradePuzzle, type TierGrade } from "./tier-contract";
 import { suspectToken } from "./text-template";
 import type { Assignment, Clue, Difficulty, FloorPlan, Suspect } from "./types";
@@ -294,6 +307,62 @@ function buildCandidates(
     text: phrase(rng, STRONG_HEIGHT, { rank, room: roomName }),
     isSatisfied: (a) => !a[suspect.id] || roomNameAt(floorPlan, a[suspect.id]!) === roomName,
   });
+
+  // ---- Conditional (IF-THEN) clues ----
+  // These create powerful logical chains by linking two conditions.
+  // They appear primarily in Hard+ puzzles where elegant deduction paths matter.
+  // Only add conditionals for suspects that have meaningful relationships.
+  if (others.length >= 2) {
+    // Pattern 1: If A was in room X, then B was in row Y
+    // Pick one other suspect to form the conditional
+    const otherForConditional = others[randInt(rng, 0, others.length - 1)]!;
+    const otherCell = solution[otherForConditional.id]!;
+    const otherRow = otherCell.row + 1;
+    
+    // Create bidirectional conditionals based on actual positions
+    candidates.push({
+      tier: "strong",
+      suspectId: suspect.id,
+      text: phrase(rng, CONDITIONAL_IF_ROOM_THEN_ROW, {
+        nameA: self,
+        room: roomName,
+        nameB: suspectToken(otherForConditional.id),
+        row: otherRow,
+      }),
+      isSatisfied: (a) => {
+        const posA = a[suspect.id];
+        const posB = a[otherForConditional.id];
+        // Implication: if A is not in room, clue is vacuously true
+        if (!posA || roomNameAt(floorPlan, posA) !== roomName) return true;
+        // A is in room, so B must be in the specified row
+        return !posB || posB.row === otherForConditional.row;
+      },
+      fragment: undefined, // Conditionals don't compound
+    });
+    
+    // Pattern 2: If height rank matches position, then specific suspect
+    // This creates cross-referencing between height and location
+    const size = floorPlan.size;
+    const positionDesc = cell.row < size / 2 ? "in the northern half" : "in the southern half";
+    candidates.push({
+      tier: "strong",
+      suspectId: suspect.id,
+      text: phrase(rng, CONDITIONAL_IF_HEIGHT_THEN_POSITION, {
+        rank,
+        name: self,
+        position: positionDesc,
+      }),
+      isSatisfied: (a) => {
+        const pos = a[suspect.id];
+        if (!pos) return true;
+        const isInPosition = pos.row < size / 2 ? "in the northern half" : "in the southern half";
+        // If this suspect has this height rank, they must be in this position
+        // Since we know their actual height and position from solution, this is always true there
+        return isInPosition === positionDesc;
+      },
+      fragment: undefined,
+    });
+  }
 
   // ---- Compound cards ----
   // Two fragments about the same suspect joined into one sentence. The

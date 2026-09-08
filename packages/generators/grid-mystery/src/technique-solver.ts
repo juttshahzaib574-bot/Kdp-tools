@@ -167,7 +167,7 @@ export function structureClues(
   return { seats, structured };
 }
 
-type Candidates = Map<string, Set<number>>;
+export type Candidates = Map<string, Set<number>>;
 
 /**
  * Rows or columns k suspects are confined to belong to those k alone.
@@ -862,6 +862,9 @@ export function describeProfile(profile: TechniqueProfile): string {
 }
 
 export { cellIndex };
+// Re-export key functions and types for convenient importing by generator
+export { propagate, copy as copyCandidates, buildEvidenceState, copyEvidence };
+export type { Candidates, EvidenceState, Structured };
 
 /**
  * Can a person actually reason their way to this answer?
@@ -883,4 +886,41 @@ export function isDeducible(
 ): boolean {
   const profile = solveByTechnique(puzzle, constraints, "crossLayer");
   return profile.solved && profile.splits === 0;
+}
+
+/**
+ * Sums the total number of candidate cells across all suspects.
+ * Used for scoring how much a clue narrows the search space.
+ */
+export function sumCandidateCounts(candidates: Candidates): number {
+  let sum = 0;
+  for (const set of candidates.values()) {
+    sum += set.size;
+  }
+  return sum;
+}
+
+/**
+ * Applies a single clue constraint to candidate sets.
+ * Returns true if any elimination occurred.
+ */
+export function applySingleClueConstraint(
+  constraint: ClueConstraint,
+  candidates: Candidates,
+  size: number,
+  seats: readonly number[],
+): boolean {
+  const suspectSet = candidates.get(constraint.suspectId);
+  if (!suspectSet) return false;
+  
+  let changed = false;
+  for (const index of [...suspectSet]) {
+    const cell = cellAt(size, index);
+    // Test if this single placement satisfies the clue
+    if (!constraint.isSatisfied({ [constraint.suspectId]: cell })) {
+      suspectSet.delete(index);
+      changed = true;
+    }
+  }
+  return changed;
 }

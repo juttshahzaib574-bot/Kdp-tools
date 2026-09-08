@@ -10,6 +10,8 @@ import {
 } from "@kdp/shared";
 import {
   applyOverrides,
+  buildWalkthrough,
+  generateBookHintLadder,
   generateGridMystery,
   renderGridMysteryPdf,
   type GridMysteryPuzzle,
@@ -105,6 +107,7 @@ interface BookPuzzles {
   puzzles: GridMysteryPuzzle[];
   caseTitles: (string | undefined)[];
   caseSubtitles: (string | undefined)[];
+  hintLadder?: any; // BookHintLadder from generator
 }
 
 /**
@@ -140,16 +143,36 @@ async function loadBookPuzzles(bookId: string, input: GridMysteryInput): Promise
         seed: Math.floor(Math.random() * 2 ** 31),
       }),
     );
+    
+    // Generate walkthrough data for fresh puzzles
+    const walkthroughData = puzzles.map((puzzle, idx) => {
+      const walkthrough = buildWalkthrough(puzzle);
+      return {
+        puzzleId: `puzzle-${idx}`,
+        clues: puzzle.clues,
+        walkthrough: walkthrough.steps,
+      };
+    });
+    
+    const hintLadder = generateBookHintLadder(`book-${bookId}`, walkthroughData);
+    
     return {
       puzzles,
       caseTitles: puzzles.map(() => undefined),
       caseSubtitles: puzzles.map(() => undefined),
+      hintLadder,
     };
   }
 
   const puzzles: GridMysteryPuzzle[] = [];
   const caseTitles: (string | undefined)[] = [];
   const caseSubtitles: (string | undefined)[] = [];
+  const walkthroughData: Array<{
+    puzzleId: string;
+    clues: any[];
+    walkthrough: any[];
+  }> = [];
+
   for (const row of rows) {
     // The row's difficulty is the tier the puzzle EARNED, and the seed
     // reproduces it exactly — so this regenerates the same puzzle, it
@@ -161,11 +184,26 @@ async function loadBookPuzzles(bookId: string, input: GridMysteryInput): Promise
       themeId: input.theme,
       seed: row.seed,
     });
-    puzzles.push(applyOverrides(puzzle, overrides ?? undefined));
+    const appliedPuzzle = applyOverrides(puzzle, overrides ?? undefined);
+    puzzles.push(appliedPuzzle);
     caseTitles.push(overrides?.title);
     caseSubtitles.push(overrides?.subtitle);
+
+    // Generate walkthrough and hints for answer key
+    const walkthrough = buildWalkthrough(appliedPuzzle);
+    walkthroughData.push({
+      puzzleId: `puzzle-${row.index}`,
+      clues: appliedPuzzle.clues,
+      walkthrough: walkthrough.steps,
+    });
   }
-  return { puzzles, caseTitles, caseSubtitles };
+
+  // Generate hint ladders for all puzzles
+  const hintLadder = rows.length > 0 
+    ? generateBookHintLadder(`book-${bookId}`, walkthroughData)
+    : null;
+
+  return { puzzles, caseTitles, caseSubtitles, hintLadder };
 }
 
 /** Reads a Puzzle row's Json overrides column back into its typed shape; anything malformed is treated as "no overrides" rather than failing the export. */
