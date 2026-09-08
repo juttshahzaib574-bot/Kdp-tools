@@ -123,3 +123,10 @@ export {
   type SolutionWalkthrough,
   type WalkthroughStep,
 } from "./walkthrough";
+
+export {
+  generateHintLadder,
+  generateBookHintLadder,
+  type PuzzleHintLadder,
+  type BookHintLadder,
+} from "./hint-ladder";
