@@ -21,7 +21,7 @@
     "@prisma/config": "^7.10.0",
     "@types/node": "^26",
     "@types/pg": "^8.11.10",
-    "dotenv": "^16.4.5",
+    "dotenv": "^17.4.2",
     "prisma": "^7.10.0",
     "typescript": "^5.9.3"
   }
