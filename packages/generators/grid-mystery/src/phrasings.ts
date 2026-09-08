@@ -331,3 +331,56 @@ export const EV_OBJECT_TALLEST: Template<EvTallestParams>[] = [
   ({ rank, object }) => `The ${object} was held by the ${ordinal(rank)}-tallest of them.`,
   ({ rank, object }) => `Ranked by height, the ${ordinal(rank)}-tallest had the ${object}.`,
 ];
+
+// ---------- Conditional (IF-THEN) tier phrasings ----------
+// These clues create powerful logical chains by linking two conditions.
+// They appear primarily in Hard+ puzzles where elegant deduction paths matter.
+
+export interface ConditionalRoomRowParams {
+  nameA: string;
+  room: string;
+  nameB: string;
+  row: number;
+}
+export const CONDITIONAL_IF_ROOM_THEN_ROW: Template<ConditionalRoomRowParams>[] = [
+  ({ nameA, room, nameB, row }) => `If ${nameA} was in the ${room}, then ${nameB} was in row ${row}.`,
+  ({ nameA, room, nameB, row }) => `Were ${nameA} in the ${room}, ${nameB} would stand in row ${row}.`,
+  ({ nameA, room, nameB, row }) => `${nameB} occupied row ${row} if ${nameA} was in the ${room}.`,
+  ({ nameA, room, nameB, row }) => `Assuming ${nameA} was in the ${room}, ${nameB} must have been in row ${row}.`,
+  ({ nameA, room, nameB, row }) => `In the scenario where ${nameA} was in the ${room}, ${nameB} was in row ${row}.`,
+];
+
+export interface ConditionalAdjacentThenColumnParams {
+  nameA: string;
+  nameB: string;
+  nameC: string;
+  col: number;
+}
+export const CONDITIONAL_IF_ADJACENT_THEN_COLUMN: Template<ConditionalAdjacentThenColumnParams>[] = [
+  ({ nameA, nameB, nameC, col }) => `If ${nameA} stood adjacent to ${nameB}, then ${nameC} was in column ${col}.`,
+  ({ nameA, nameB, nameC, col }) => `Should ${nameA} and ${nameB} have been neighbors, ${nameC} occupied column ${col}.`,
+  ({ nameA, nameB, nameC, col }) => `${nameC} was in column ${col} if ${nameA} was next to ${nameB}.`,
+];
+
+export interface ConditionalSameRoomThenDirectionParams {
+  nameA: string;
+  nameB: string;
+  room: string;
+  nameC: string;
+  direction: string;
+}
+export const CONDITIONAL_IF_SAME_ROOM_THEN_DIRECTION: Template<ConditionalSameRoomThenDirectionParams>[] = [
+  ({ nameA, nameB, room, nameC, direction }) => `If ${nameA} shared the ${room} with ${nameB}, then ${nameC} was ${direction} of them.`,
+  ({ nameA, nameB, room, nameC, direction }) => `Were ${nameA} and ${nameB} both in the ${room}, ${nameC} would be ${direction}.`,
+];
+
+export interface ConditionalHeightThenPositionParams {
+  rank: number;
+  name: string;
+  position: string;
+}
+export const CONDITIONAL_IF_HEIGHT_THEN_POSITION: Template<ConditionalHeightThenPositionParams>[] = [
+  ({ rank, name, position }) => `If the ${ordinal(rank)}-tallest was ${position}, then it was ${name}.`,
+  ({ rank, name, position }) => `The ${ordinal(rank)}-tallest stood ${position} only if it was ${name}.`,
+  ({ rank, name, position }) => `${name} was ${position} if they were the ${ordinal(rank)}-tallest.`,
+];

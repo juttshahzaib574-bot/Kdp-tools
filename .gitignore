@@ -1,33 +1,57 @@
-# dependencies
+```
+# Dependencies
 node_modules/
-.pnpm-store/
+pnpm-lock.yaml
 
-# env files - never commit secrets
-.env
-.env.local
-.env.*.local
-
-# build output
-.next/
+# Build artifacts
 dist/
 build/
-out/
+target/
 
-# Prisma
-packages/db/generated/
-
-# logs
+# Logs
 *.log
-npm-debug.log*
-pnpm-debug.log*
 
-# OS / editor
-.DS_Store
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editor
 .vscode/
 .idea/
+*.swp
+*.swo
+*.tmp
 
-# testing
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+.env
+
+# Coverage
 coverage/
+htmlcov/
+.coverage
 
-# turbo / cache
-.turbo/
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+.jest/
+.nyc_output/
+
+# TypeScript/JavaScript
+*.tsbuildinfo
+.next/
+nuxt/dist/
+
+# Package manager
+.yarn/
+.pnpm-store/
+```
