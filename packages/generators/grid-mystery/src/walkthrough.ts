@@ -111,7 +111,7 @@ export function generateWalkthrough(puzzle: GridMysteryPuzzle): PuzzleWalkthroug
     
     return {
       title: `Step ${stepNumber + idx}: ${fact.kind === "personHas" ? "Identify an Object" : "Cross-Reference Evidence"}`,
-      explanation: `${explanation} ${suspectId ? `This pins the ${fact.object} to ${names.get(suspectId)}.` : ""}`,
+      explanation: `${explanation} ${suspectId ? `This pins the ${fact.object} to ${names[suspectId]}.` : ""}`,
       suspectIds: suspectId ? [suspectId] : undefined,
     } as WalkthroughStep;
   });

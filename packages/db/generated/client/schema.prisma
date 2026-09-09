@@ -1,0 +1,255 @@
+// Prisma schema for KDP Studio Library.
+//
+// Auth is handled entirely by Clerk (no passwords stored here). `User.clerkId`
+// is the link between Clerk's identity and our data. Every other table is
+// scoped to a `userId` so row-level access can always be checked in one place.
+//
+// Prisma 7 dropped the datasource `url` property here — the connection is
+// configured in two places instead: prisma.config.ts (for the CLI: generate,
+// migrate) and the driver adapter in src/index.ts (for the runtime client).
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+enum BookType {
+  MURDER_MYSTERY
+  COLOR_BY_NUMBER
+  MYSTERY_MOSAIC
+}
+
+enum BookStatus {
+  DRAFT
+  QUEUED
+  GENERATING
+  READY
+  FAILED
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscription Subscription?
+  books        Book[]
+  auditLogs    AuditLog[]
+  assets       Asset[]
+  customPages  CustomPage[]
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId     String             @unique
+  stripeSubscriptionId String?            @unique
+  status               SubscriptionStatus @default(INCOMPLETE)
+  plan                 String
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+model Book {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        BookType
+  title       String
+  status      BookStatus @default(DRAFT)
+  // Validated (zod) generator input, e.g. theme, suspect count, difficulty.
+  inputParams Json
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  jobs    GenerationJob[]
+  puzzles Puzzle[]
+
+  @@index([userId])
+}
+
+/**
+ * One puzzle inside a book, as a durable editable row.
+ * Puzzles used to exist only inside the export worker: generated in
+ * memory, rendered, discarded. That made "review and customize before
+ * you export" impossible — there was nothing to review, and nothing for
+ * an edit to autosave to.
+ * The row stores the SEED and difficulty rather than the puzzle itself.
+ * Generation is fully deterministic, so seed + difficulty + grid size +
+ * theme reproduces the identical puzzle on demand; storing the whole
+ * floor plan and clue set would be a large denormalised blob that could
+ * drift out of sync with the generator. Overrides — retitles, renames,
+ * height edits — are stored alongside and applied at render time.
+ */
+model Puzzle {
+  id     String @id @default(cuid())
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  /**
+   * Position in the book, 0-based. Rerolling never changes this.
+   */
+  index               Int
+  /**
+   * Regenerates this exact puzzle. A reroll writes a new value here.
+   */
+  seed                Int
+  /**
+   * The tier this puzzle actually earned — see engine calibration.
+   */
+  difficulty          String
+  /**
+   * What was requested, when calibration re-tiered it.
+   */
+  requestedDifficulty String
+  gridSize            Int
+  /**
+   * Measured solver effort, recorded so the ledger shows what gated it.
+   */
+  solveNodes          Int    @default(0)
+
+  /**
+   * Publisher edits: title, subtitle, suspect names, suspect heights.
+   * Applied at render time — none of them touch the puzzle's logic, so
+   * a rename needs no re-solve.
+   */
+  overrides Json?
+
+  /**
+   * Only ever set once a solver run has proved exactly one solution.
+   * A reroll clears it and re-sets it after verification, so the UI's
+   * verified badge can never appear ahead of the proof.
+   */
+  verifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([bookId, index])
+  @@index([bookId])
+}
+
+model GenerationJob {
+  id            String    @id @default(cuid())
+  bookId        String
+  book          Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  status        JobStatus @default(QUEUED)
+  attempts      Int       @default(0)
+  error         String?
+  resultFileKey String? // object storage key for the generated interior PDF
+  coverFileKey  String? // object storage key for the generated full-wrap cover PDF
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([bookId])
+  @@index([status])
+}
+
+enum CustomPageSection {
+  FRONT
+  BACK
+}
+
+// A user-defined front/back-matter page beyond the six built-in roles (see
+// packages/shared/src/page-roles.ts) — e.g. "Series Promo Page". Behaves
+// exactly like a built-in role: it gets its own image gallery, and an
+// assigned image is a direct full-page swap in the export. `content` is
+// the fallback when no image is assigned yet; a page with neither an image
+// nor content is skipped entirely rather than printing near-blank.
+// Reusable across every book the user creates, the same as a built-in role.
+model CustomPage {
+  id             String            @id @default(cuid())
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  subtitle       String?
+  content        String?
+  section        CustomPageSection
+  // Sort order among the user's *other* custom pages within the same
+  // section — custom pages are inserted as a block after that section's
+  // built-in pages, not interleaved between them (the interior layout is a
+  // fixed sequence of typed page functions, not a generic ordered list).
+  position       Int
+  // Independent placement per section — {align, position}, see
+  // packages/shared/src/page-layout.ts. Null means "use this page's own
+  // default placement" (same as an omitted override on a built-in page).
+  titleLayout    Json?
+  subtitleLayout Json?
+  contentLayout  Json?
+  createdAt      DateTime          @default(now())
+
+  assets Asset[]
+
+  @@index([userId])
+  @@index([userId, section, position])
+}
+
+// A user-uploaded image assigned either to a built-in page role (see
+// packages/shared/src/page-roles.ts) or to a user-defined CustomPage —
+// stored already normalized (resized + re-compressed on upload, see
+// apps/web/src/lib/assets.ts), so byteSize here is what actually counts
+// against the user's storage quota, not whatever size the original upload
+// was.
+model Asset {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customPageId String?
+  customPage   CustomPage? @relation(fields: [customPageId], references: [id], onDelete: SetNull)
+  // One of MATTER_PAGE_ROLES (packages/shared/src/page-roles.ts), set when
+  // this image was uploaded directly into that built-in role's own
+  // gallery — mutually exclusive with customPageId in practice (an image
+  // belongs to exactly one gallery), enforced by the upload API rather
+  // than the schema.
+  pageRole     String?
+  fileKey      String // object storage key
+  originalName String
+  mimeType     String
+  byteSize     Int
+  width        Int
+  height       Int
+  createdAt    DateTime    @default(now())
+
+  @@index([userId])
+  @@index([customPageId])
+  @@index([userId, pageRole])
+}
+
+// Minimal audit trail for security-sensitive actions (billing changes, book
+// deletion, etc.) so incidents are investigable after the fact.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  metadata  Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}

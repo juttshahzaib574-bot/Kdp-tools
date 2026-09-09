@@ -345,7 +345,7 @@ function drawFloorPlan(
         start: { x: x + cell * 0.3, y: y + cell },
         end: { x: x + cell * 0.7, y: y + cell },
         thickness: 0.5,
-        color: palette.ruleFaint,
+        color: palette.rule,
       });
     }
   }
@@ -922,8 +922,6 @@ export function drawPuzzlePage(
   const blockedLabel = "BLOCKED ❌";
   
   // Calculate width needed for complete legend
-  const keyIcon = 9;
-  const keyGap = 4;
   const openWidth = fonts.displayBold.widthOfTextAtSize(openLabel, keySize);
   const blockedWidth = fonts.displayBold.widthOfTextAtSize(blockedLabel, keySize);
   const propsWidth = allPropNames.length * (keyIcon + 8); // Extra space for size indicator
