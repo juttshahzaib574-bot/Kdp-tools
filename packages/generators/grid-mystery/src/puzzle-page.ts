@@ -12,6 +12,8 @@ import type { GridMysteryPuzzle } from "./types";
 import { silentCardText, victimCardText } from "./verdict";
 import { mulberry32 } from "./rng";
 import { drawFloorCell, drawPortraitImage, drawPropImage, type PuzzleArt } from "./art-embed";
+import { generateWalkthrough, formatWalkthroughForPrint } from "./walkthrough";
+import { generateCertificationBadge, renderCertificationBadge } from "./certification";
 
 // One puzzle, one page.
 //
@@ -718,11 +720,17 @@ export function drawPuzzlePage(
     floorStrength?: number;
     /** Suspect-card corner style. Defaults to rounded. */
     cardCorners?: "rounded" | "square";
+    /**
+     * Whether to include walkthrough and certification badge on the page.
+     * For publisher review cards and answer key pages. Defaults to false.
+     */
+    includeReviewMaterials?: boolean;
   } = {},
 ): PuzzleLayoutMetrics {
   const textureSeed = options.textureSeed ?? 1;
   const cardCorners = options.cardCorners ?? "rounded";
   const textureIntensity = options.textureIntensity ?? "normal";
+  const includeReviewMaterials = options.includeReviewMaterials ?? false;
   // Outside production, every draw below is checked against the content
   // box and throws if it crosses it. Print layout fails silently
   // otherwise — see page-bounds.ts.
