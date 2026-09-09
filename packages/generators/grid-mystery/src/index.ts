@@ -116,3 +116,19 @@ export {
   type PropEntry,
 } from "./art";
 export { embedPuzzleArt, type PuzzleArt } from "./art-embed";
+
+// Walkthrough generation for publisher review cards
+export {
+  generateWalkthrough,
+  formatWalkthroughForPrint,
+  type PuzzleWalkthrough,
+  type WalkthroughStep,
+} from "./walkthrough";
+
+// Certification badge system
+export {
+  generateCertificationBadge,
+  renderCertificationBadge,
+  createCompactBadge,
+  type CertificationBadge,
+} from "./certification";

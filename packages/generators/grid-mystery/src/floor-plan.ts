@@ -168,10 +168,15 @@ export function roomAt(rooms: Room[], cell: Cell): Room | undefined {
 }
 
 /**
- * Marks the solution cells (guaranteed occupiable) plus a handful of decoy
- * cells as seatable, and scatters landmark props on the remaining blocked
- * cells — one per room where possible — matching the "CAN OCCUPY / BLOCKED"
- * convention this puzzle format uses.
+ * SHIGAI GRAMMAR ADOPTION v1: OPEN-MAJORITY floor plan.
+ *
+ * Every floor cell is open by default (occupiable). Only prop/landmark
+ * cells are blocked. Solution cells are guaranteed occupiable (they must
+ * have suspects seated there). No decoy cells — the old "seat disc"
+ * approach is deleted entirely.
+ *
+ * Landmarks (props) are placed on blocked cells, one per room where
+ * possible, matching the "CAN OCCUPY ✅ / BLOCKED ❌" convention.
  */
 export function buildOccupyMaskAndLandmarks(
   size: number,
@@ -180,32 +185,104 @@ export function buildOccupyMaskAndLandmarks(
   landmarkNames: readonly string[],
   rng: Rng,
 ): { occupyMask: boolean[][]; landmarks: Landmark[] } {
-  const occupyMask: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
-  for (const cell of solutionCells) {
-    occupyMask[cell.row]![cell.col] = true;
-  }
+  // OPEN-MAJORITY: Start with ALL cells occupiable (true)
+  const occupyMask: boolean[][] = Array.from({ length: size }, () => Array(size).fill(true));
 
-  const decoyTarget = size;
-  for (let attempts = 0; attempts < decoyTarget * 10 && attempts < size * size; attempts++) {
-    const row = randInt(rng, 0, size - 1);
-    const col = randInt(rng, 0, size - 1);
-    if (!occupyMask[row]![col]) {
-      occupyMask[row]![col] = true;
-      const decoysPlaced = occupyMask.flat().filter(Boolean).length - solutionCells.length;
-      if (decoysPlaced >= decoyTarget) break;
+  // Place landmarks (props) first — these will block cells
+  const shuffledNames = shuffle(rng, landmarkNames);
+  const landmarks: Landmark[] = [];
+  
+  // One landmark per room where possible, placed on a random cell in that room
+  rooms.forEach((room, index) => {
+    if (room.cells.length === 0) return;
+    const cell = room.cells[randInt(rng, 0, room.cells.length - 1)]!;
+    // Mark this cell as blocked (not occupiable)
+    occupyMask[cell.row]![cell.col] = false;
+    // Assign size class based on room size: L for large rooms (8+ cells), M for medium (5-7), S for small (<5)
+    const sizeClass: "L" | "M" | "S" = room.cells.length >= 8 ? "L" : room.cells.length >= 5 ? "M" : "S";
+    landmarks.push({ cell, name: shuffledNames[index % shuffledNames.length]!, sizeClass });
+  });
+
+  // Ensure all solution cells are occupiable (they must have seats)
+  // If a solution cell landed on a prop, relocate the prop
+  for (const cell of solutionCells) {
+    if (!occupyMask[cell.row]![cell.col]) {
+      // This solution cell is blocked by a prop — find a new spot for that prop
+      const landmarkIndex = landmarks.findIndex((l) => l.cell.row === cell.row && l.cell.col === cell.col);
+      if (landmarkIndex !== -1) {
+        const landmark = landmarks[landmarkIndex]!;
+        // Find an alternative cell in the same room that's not a solution cell
+        const room = roomAt(rooms, cell);
+        if (room) {
+          const alternativeCells = room.cells.filter((c) => 
+            occupyMask[c.row]![c.col] && 
+            !solutionCells.some((sc) => sc.row === c.row && sc.col === c.col)
+          );
+          if (alternativeCells.length > 0) {
+            const newCell = alternativeCells[randInt(rng, 0, alternativeCells.length - 1)]!;
+            occupyMask[newCell.row]![newCell.col] = false;
+            landmarks[landmarkIndex] = { cell: newCell, name: landmark.name };
+          }
+        }
+      }
+      // Ensure the solution cell is marked occupiable
+      occupyMask[cell.row]![cell.col] = true;
     }
   }
 
-  const shuffledNames = shuffle(rng, landmarkNames);
-  const landmarks: Landmark[] = [];
-  rooms.forEach((room, index) => {
-    const blockedCells = room.cells.filter((cell) => !occupyMask[cell.row]![cell.col]);
-    if (blockedCells.length === 0) return;
-    const cell = blockedCells[randInt(rng, 0, blockedCells.length - 1)]!;
-    landmarks.push({ cell, name: shuffledNames[index % shuffledNames.length]! });
-  });
-
   return { occupyMask, landmarks };
+}
+
+/**
+ * Identifies door positions between connected rooms.
+ * 
+ * A door is a 1-cell gap in the wall between two orthogonally adjacent rooms.
+ * Doors are placed on shared boundaries where rooms meet.
+ */
+export function identifyDoors(rooms: Room[], size: number, rng: Rng): Cell[] {
+  const doors: Cell[] = [];
+  const roomIndexAt = (row: number, col: number): number => {
+    return rooms.findIndex((r) => r.cells.some((c) => c.row === row && c.col === col));
+  };
+
+  // Track which room pairs already have a door
+  const doorPairs = new Set<string>();
+
+  // For each pair of adjacent rooms, place one door on their shared boundary
+  for (let i = 0; i < rooms.length; i++) {
+    for (let j = i + 1; j < rooms.length; j++) {
+      const roomA = rooms[i]!;
+      const roomB = rooms[j]!;
+      
+      // Find all shared boundary cells
+      const sharedBoundaries: Cell[] = [];
+      for (const cellA of roomA.cells) {
+        for (const [dr, dc] of NEIGHBOUR_DELTAS) {
+          const neighborRow = cellA.row + dr;
+          const neighborCol = cellA.col + dc;
+          if (neighborRow >= 0 && neighborRow < size && neighborCol >= 0 && neighborCol < size) {
+            if (roomIndexAt(neighborRow, neighborCol) === j) {
+              // This is a boundary cell between room A and room B
+              // Place door at the midpoint (on the edge)
+              sharedBoundaries.push({ row: cellA.row, col: cellA.col });
+            }
+          }
+        }
+      }
+
+      // If rooms share a boundary and don't already have a door, place one
+      if (sharedBoundaries.length > 0) {
+        const pairKey = `${i}-${j}`;
+        if (!doorPairs.has(pairKey)) {
+          const doorCell = sharedBoundaries[randInt(rng, 0, sharedBoundaries.length - 1)]!;
+          doors.push(doorCell);
+          doorPairs.add(pairKey);
+        }
+      }
+    }
+  }
+
+  return doors;
 }
 
 export function toFloorPlan(
@@ -213,6 +290,7 @@ export function toFloorPlan(
   rooms: Room[],
   occupyMask: boolean[][],
   landmarks: Landmark[],
+  doors?: Cell[],
 ): FloorPlan {
-  return { size, rooms, occupyMask, landmarks };
+  return { size, rooms, occupyMask, landmarks, doors };
 }

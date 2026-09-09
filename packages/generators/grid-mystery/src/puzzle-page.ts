@@ -1,4 +1,5 @@
 import type { PDFFont, PDFPage, RGB } from "pdf-lib";
+import { rgb } from "pdf-lib";
 import { caseBriefFor, caseTitleFor, howToSolveFor } from "./case-titles";
 import { renderTemplate, resolveNames } from "./text-template";
 import { roomAt } from "./floor-plan";
@@ -11,6 +12,8 @@ import type { GridMysteryPuzzle } from "./types";
 import { silentCardText, victimCardText } from "./verdict";
 import { mulberry32 } from "./rng";
 import { drawFloorCell, drawPortraitImage, drawPropImage, type PuzzleArt } from "./art-embed";
+import { generateWalkthrough, formatWalkthroughForPrint } from "./walkthrough";
+import { generateCertificationBadge, renderCertificationBadge } from "./certification";
 
 // One puzzle, one page.
 //
@@ -322,6 +325,31 @@ function drawFloorPlan(
     }
   }
 
+  // Door gaps — SHIGAI GRAMMAR ADOPTION v1: 1-cell doorway gaps between connected rooms.
+  // Doors are placed on shared boundaries where rooms meet (from puzzle.floorPlan.doors).
+  if (puzzle.floorPlan.doors && puzzle.floorPlan.doors.length > 0) {
+    const doorGapColor = palette.greyscale ? rgb(0.9, 0.9, 0.9) : rgb(1, 0.95, 0.85); // Light cream for door gap
+    for (const door of puzzle.floorPlan.doors) {
+      const x = cellX(door.col);
+      const y = cellY(door.row);
+      // Draw a light rectangle to represent the door gap (no wall line through it)
+      page.drawRectangle({
+        x,
+        y,
+        width: cell,
+        height: cell,
+        color: doorGapColor,
+      });
+      // Optional: add a subtle door arc or threshold line
+      page.drawLine({
+        start: { x: x + cell * 0.3, y: y + cell },
+        end: { x: x + cell * 0.7, y: y + cell },
+        thickness: 0.5,
+        color: palette.rule,
+      });
+    }
+  }
+
   // Room names, placed inside each room.
   //
   // Naive "top-left cell of the room" placement produced two visible
@@ -408,26 +436,30 @@ function drawFloorPlan(
     });
   }
 
-  // Props, then seats on top.
-  const landmarkAt = new Map(landmarks.map((l) => [`${l.cell.row},${l.cell.col}`, l.name]));
+  // Props only — SHIGAI GRAMMAR ADOPTION v1: NO seat discs.
+  // OPEN-MAJORITY means every cell is open unless blocked by a prop.
+  const landmarkAt = new Map(landmarks.map((l) => [`${l.cell.row},${l.cell.col}`, l]));
   for (let row = 0; row < size; row++) {
     for (let col = 0; col < size; col++) {
       const cx = cellX(col) + cell / 2;
       const cy = cellY(row) + cell / 2;
-      const prop = landmarkAt.get(`${row},${col}`);
-      if (prop) {
-        const propImage = art?.props.get(prop);
+      const landmark = landmarkAt.get(`${row},${col}`);
+      if (landmark) {
+        // Apply size class scaling: L=90%, M=70%, S=50% of cell size
+        const sizeClass = landmark.sizeClass ?? "M";
+        const scaleFactor = sizeClass === "L" ? 0.90 : sizeClass === "M" ? 0.70 : 0.50;
+        const scaledSize = cell * scaleFactor;
+        const propImage = art?.props.get(landmark.name);
         if (propImage) {
-          drawPropImage(page, propImage, cx, cy, cell);
+          drawPropImage(page, propImage, cx, cy, scaledSize);
         } else {
           drawProp(
-            { page, cx, cy, size: cell, ink: palette.ink, fill: palette.propFill },
-            shapeForLandmark(prop),
+            { page, cx, cy, size: scaledSize, ink: palette.ink, fill: palette.propFill },
+            shapeForLandmark(landmark.name),
           );
         }
-      } else if (occupyMask[row]![col]) {
-        drawSeat(page, cx, cy, cell, palette);
       }
+      // No seat discs drawn — OPEN-MAJORITY grammar removes them entirely
     }
   }
 }
@@ -688,11 +720,17 @@ export function drawPuzzlePage(
     floorStrength?: number;
     /** Suspect-card corner style. Defaults to rounded. */
     cardCorners?: "rounded" | "square";
+    /**
+     * Whether to include walkthrough and certification badge on the page.
+     * For publisher review cards and answer key pages. Defaults to false.
+     */
+    includeReviewMaterials?: boolean;
   } = {},
 ): PuzzleLayoutMetrics {
   const textureSeed = options.textureSeed ?? 1;
   const cardCorners = options.cardCorners ?? "rounded";
   const textureIntensity = options.textureIntensity ?? "normal";
+  const includeReviewMaterials = options.includeReviewMaterials ?? false;
   // Outside production, every draw below is checked against the content
   // box and throws if it crosses it. Print layout fails silently
   // otherwise — see page-bounds.ts.
@@ -874,41 +912,26 @@ export function drawPuzzlePage(
     color: palette.accent,
   });
 
-  // ---- The board key, right-aligned on the label's row ----
+  // ---- The board key (COMPLETE LEGEND) — right-aligned on the label's row ----
   //
-  // Drawn with the puzzle's REAL furniture rather than an abstract mark:
-  // the reader is about to look for these exact shapes on the plan, and
-  // when an art pack is loaded these are the same drawings the plan
-  // itself uses. Up to three, because one is a poor sample of what the
-  // board holds and four crowds the row.
-  const propNames = [...new Set(puzzle.floorPlan.landmarks.map((l) => l.name))].slice(0, 3);
-  const openLabel = "OPEN";
-  const blockedLabel = "BLOCKED";
-  const keyWidth =
-    keyIcon +
-    keyGap +
-    fonts.displayBold.widthOfTextAtSize(openLabel, keySize) +
-    (propNames.length > 0
-      ? 11 +
-        propNames.length * (keyIcon + 1.5) +
-        keyGap +
-        fonts.displayBold.widthOfTextAtSize(blockedLabel, keySize)
-      : 0);
-  // If the key cannot fit beside the label it loses its furniture samples
-  // one at a time rather than overrunning the label — the failure mode
-  // the old legend had, and the one a reader actually notices.
+  // SHIGAI GRAMMAR ADOPTION v1: COMPLETE legend listing EVERY prop on the board.
+  // CAN OCCUPY ✅ = floor cells (no seat disc icon needed — all cells are open by default)
+  // BLOCKED ❌ = every prop/landmark name listed explicitly with size class indicator
+  const allPropNames = [...new Set(puzzle.floorPlan.landmarks.map((l) => l.name))];
+  const openLabel = "CAN OCCUPY ✅";
+  const blockedLabel = "BLOCKED ❌";
+  
+  // Calculate width needed for complete legend
+  const openWidth = fonts.displayBold.widthOfTextAtSize(openLabel, keySize);
+  const blockedWidth = fonts.displayBold.widthOfTextAtSize(blockedLabel, keySize);
+  const propsWidth = allPropNames.length * (keyIcon + 8); // Extra space for size indicator
+  const keyWidth = openWidth + keyGap + propsWidth + keyGap + blockedWidth;
+  
   const labelRight =
     box.x + methodPadX + fonts.displayBold.widthOfTextAtSize("HOW TO SOLVE", keySize) + 12;
-  let keyProps = propNames;
-  let keyW = keyWidth;
-  while (keyProps.length > 0 && right - methodPadX - keyW < labelRight) {
-    keyProps = keyProps.slice(0, -1);
-    keyW -= keyIcon + 1.5;
-  }
-  let keyX = right - methodPadX - keyW;
-
-  drawSeat(page, keyX + keyIcon / 2, headMid, keyIcon, palette);
-  keyX += keyIcon + keyGap;
+  let keyX = right - methodPadX - keyWidth;
+  
+  // CAN OCCUPY ✅ label (no icon — all floor cells are open by default in OPEN-MAJORITY)
   page.drawText(openLabel, {
     x: keyX,
     y: headMid - keySize * 0.36,
@@ -916,9 +939,11 @@ export function drawPuzzlePage(
     font: fonts.displayBold,
     color: palette.inkSoft,
   });
-  keyX += fonts.displayBold.widthOfTextAtSize(openLabel, keySize) + 11;
-  for (const name of keyProps) {
-    const propImage = options.art?.props.get(name);
+  keyX += openWidth + keyGap;
+  
+  // List EVERY prop name under BLOCKED ❌ with size class indicator
+  for (const landmark of puzzle.floorPlan.landmarks) {
+    const propImage = options.art?.props.get(landmark.name);
     if (propImage) {
       drawPropImage(page, propImage, keyX + keyIcon / 2, headMid, keyIcon / 0.78);
     } else {
@@ -931,20 +956,29 @@ export function drawPuzzlePage(
           ink: palette.ink,
           fill: palette.propFill,
         },
-        shapeForLandmark(name),
+        shapeForLandmark(landmark.name),
       );
     }
-    keyX += keyIcon + 1.5;
-  }
-  if (keyProps.length > 0) {
-    page.drawText(blockedLabel, {
-      x: keyX + keyGap - 1.5,
-      y: headMid - keySize * 0.36,
-      size: keySize,
+    keyX += keyIcon + 2;
+    // Add size class indicator: L/M/S subscript
+    const sizeClass = landmark.sizeClass ?? "M";
+    page.drawText(sizeClass, {
+      x: keyX,
+      y: headMid - keySize * 0.2,
+      size: keySize * 0.7,
       font: fonts.displayBold,
       color: palette.inkSoft,
     });
+    keyX += 6;
   }
+  
+  page.drawText(blockedLabel, {
+    x: keyX,
+    y: headMid - keySize * 0.36,
+    size: keySize,
+    font: fonts.displayBold,
+    color: palette.inkSoft,
+  });
 
   let stepY = y - methodPadY - headRowH - 4 - methodSize;
   stepLines.forEach((lines, i) => {

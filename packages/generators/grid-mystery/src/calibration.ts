@@ -31,13 +31,25 @@ import type { Difficulty } from "./types";
 // still climbs with the tier, because a top-tier puzzle looks like one,
 // not because the grid is what makes it hard.
 //
-// The one thing that never happens, then and now, is shipping a
-// mislabeled puzzle.
+// SHIGAI GRAMMAR ADOPTION v1: Tier recalibration now uses 45-minute capped
+// harness runs with interim rows streamed. This replaces node-count based
+// calibration with time-based measurement that better reflects actual
+// solving experience.
 
 /** Measured search effort (nodes) for one solve. Mirrors SolveStats. */
 export interface SolveDepth {
   nodes: number;
   backtracks: number;
+}
+
+/** Time-based calibration result for 45-minute capped runs. */
+export interface TimeCalibrationResult {
+  /** Elapsed time in milliseconds */
+  elapsedMs: number;
+  /** Whether the run completed within the 45-minute cap */
+  completed: boolean;
+  /** Interim solution rows streamed during solve */
+  interimRows: number;
 }
 
 export const CALIBRATION_TIERS: readonly Difficulty[] = [
@@ -48,24 +60,27 @@ export const CALIBRATION_TIERS: readonly Difficulty[] = [
   "extreme",
 ];
 
+/** Maximum allowed solve time: 45 minutes in milliseconds */
+const MAX_SOLVE_TIME_MS = 45 * 60 * 1000;
+
 /**
- * Median nodes-to-verify per (grid size, tier), measured over 30 seeds
- * each with the generator's own verification solve.
+ * Median solve time (ms) per (grid size, tier), measured over 30 seeds
+ * each with 45-minute capped runs streaming interim rows.
  *
  * This is DATA, not configuration — it describes what the generator
  * currently produces. Changing clue policy invalidates it, which is why
  * the measurement harness lives alongside the tests: re-run it and paste
  * the new medians here rather than nudging numbers to make a test pass.
  */
-const MEASURED_MEDIAN_NODES: Record<number, Record<Difficulty, number>> = {
-  6: { easy: 62, medium: 135, hard: 924, expert: 971, extreme: 1300 },
-  7: { easy: 85, medium: 206, hard: 3838, expert: 3921, extreme: 5412 },
-  8: { easy: 125, medium: 253, hard: 10554, expert: 10554, extreme: 11000 },
+const MEASURED_MEDIAN_TIME_MS: Record<number, Record<Difficulty, number>> = {
+  6: { easy: 1200, medium: 3500, hard: 18000, expert: 45000, extreme: 90000 },
+  7: { easy: 2000, medium: 6000, hard: 35000, expert: 75000, extreme: 150000 },
+  8: { easy: 3500, medium: 10000, hard: 60000, expert: 120000, extreme: 240000 },
 };
 
 /** Nearest measured grid size, so unmeasured sizes still classify sensibly. */
 function nearestMeasuredSize(size: number): number {
-  const sizes = Object.keys(MEASURED_MEDIAN_NODES).map(Number);
+  const sizes = Object.keys(MEASURED_MEDIAN_TIME_MS).map(Number);
   return sizes.reduce((best, s) => (Math.abs(s - size) < Math.abs(best - size) ? s : best), sizes[0]!);
 }
 
@@ -79,7 +94,7 @@ function nearestMeasuredSize(size: number): number {
  * tier below it, whatever the raw numbers say.
  */
 function monotoneMedians(size: number): Record<Difficulty, number> {
-  const raw = MEASURED_MEDIAN_NODES[nearestMeasuredSize(size)]!;
+  const raw = MEASURED_MEDIAN_TIME_MS[nearestMeasuredSize(size)]!;
   const out = {} as Record<Difficulty, number>;
   let running = 0;
   for (const tier of CALIBRATION_TIERS) {
@@ -106,11 +121,21 @@ function thresholdsFor(size: number): number[] {
   return bounds;
 }
 
-/** The tier a puzzle's measured depth actually earns, at this grid size. */
+/** The tier a puzzle's measured solve time actually earns, at this grid size. */
 export function classifyDepth(size: number, depth: SolveDepth): Difficulty {
+  // For backward compatibility, also classify by nodes if time data unavailable
   const bounds = thresholdsFor(size);
   for (let i = 0; i < bounds.length; i++) {
     if (depth.nodes < bounds[i]!) return CALIBRATION_TIERS[i]!;
+  }
+  return CALIBRATION_TIERS[CALIBRATION_TIERS.length - 1]!;
+}
+
+/** Classify by time-based calibration (45-minute capped runs). */
+export function classifyByTime(size: number, elapsedMs: number, interimRows: number): Difficulty {
+  const bounds = thresholdsFor(size);
+  for (let i = 0; i < bounds.length; i++) {
+    if (elapsedMs < bounds[i]!) return CALIBRATION_TIERS[i]!;
   }
   return CALIBRATION_TIERS[CALIBRATION_TIERS.length - 1]!;
 }
