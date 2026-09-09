@@ -1,33 +1,3 @@
-# dependencies
-node_modules/
-.pnpm-store/
+(docs/kdp-vs-shigai-analysis.md is a markdown documentation file, which is source content that should not be ignored)
 
-# env files - never commit secrets
-.env
-.env.local
-.env.*.local
-
-# build output
-.next/
-dist/
-build/
-out/
-
-# Prisma
-packages/db/generated/
-
-# logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-
-# OS / editor
-.DS_Store
-.vscode/
-.idea/
-
-# testing
-coverage/
-
-# turbo / cache
-.turbo/
+# No changes needed - only documentation file added
