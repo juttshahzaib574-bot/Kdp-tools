@@ -198,7 +198,9 @@ export function buildOccupyMaskAndLandmarks(
     const cell = room.cells[randInt(rng, 0, room.cells.length - 1)]!;
     // Mark this cell as blocked (not occupiable)
     occupyMask[cell.row]![cell.col] = false;
-    landmarks.push({ cell, name: shuffledNames[index % shuffledNames.length]! });
+    // Assign size class based on room size: L for large rooms (8+ cells), M for medium (5-7), S for small (<5)
+    const sizeClass: "L" | "M" | "S" = room.cells.length >= 8 ? "L" : room.cells.length >= 5 ? "M" : "S";
+    landmarks.push({ cell, name: shuffledNames[index % shuffledNames.length]!, sizeClass });
   });
 
   // Ensure all solution cells are occupiable (they must have seats)

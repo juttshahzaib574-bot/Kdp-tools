@@ -1,7 +1,11 @@
-```
+```gitignore
 # Dependencies
 node_modules/
-.pnpm-store/
+
+# Build outputs
+dist/
+build/
+target/
 
 # Logs and temp files
 *.log
@@ -16,7 +20,61 @@ node_modules/
 .vscode/
 .idea/
 
-# OS
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Compiled files
+*.class
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+
+# Compression
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Testing
+.mypy_cache/
+.pytest_cache/
+
+# Gradle
+.gradle/
+
+# macOS
 .DS_Store
+
+# Windows
 Thumbs.db
 ```

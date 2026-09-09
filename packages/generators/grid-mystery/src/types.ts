@@ -13,6 +13,8 @@ export interface Room {
 export interface Landmark {
   cell: Cell;
   name: string;
+  /** Prop size class for scaling: L=90%, M=70%, S=50% of cell size */
+  sizeClass?: "L" | "M" | "S";
 }
 
 export interface FloorPlan {
