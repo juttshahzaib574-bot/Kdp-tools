@@ -21,6 +21,8 @@ export interface FloorPlan {
   landmarks: Landmark[];
   /** occupyMask[row][col] === true means a suspect can be seated there. */
   occupyMask: boolean[][];
+  /** Door positions between connected rooms (1-cell gaps in walls). */
+  doors?: Cell[];
 }
 
 export interface Suspect {

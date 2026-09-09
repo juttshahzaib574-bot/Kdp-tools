@@ -1,4 +1,4 @@
-import { buildOccupyMaskAndLandmarks, generateRooms, toFloorPlan } from "./floor-plan";
+import { buildOccupyMaskAndLandmarks, generateRooms, identifyDoors, toFloorPlan } from "./floor-plan";
 import { generateClueSet } from "./clues";
 import type { ClueConstraint } from "./solve";
 import { roomNameAt } from "./geometry";
@@ -251,7 +251,8 @@ function generateInternal(options: GenerateGridMysteryOptions): GeneratedWithPro
       theme.landmarkNames,
       rng,
     );
-    const floorPlan = toFloorPlan(size, rooms, occupyMask, landmarks);
+    const doors = identifyDoors(rooms, size, rng);
+    const floorPlan = toFloorPlan(size, rooms, occupyMask, landmarks, doors);
 
     // The culprit must be DERIVABLE, not drawn from a hat — see
     // pickVictimAndCulprit. If this floor plan/solution has no room with

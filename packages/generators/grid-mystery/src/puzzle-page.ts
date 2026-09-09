@@ -408,7 +408,8 @@ function drawFloorPlan(
     });
   }
 
-  // Props, then seats on top.
+  // Props only — SHIGAI GRAMMAR ADOPTION v1: NO seat discs.
+  // OPEN-MAJORITY means every cell is open unless blocked by a prop.
   const landmarkAt = new Map(landmarks.map((l) => [`${l.cell.row},${l.cell.col}`, l.name]));
   for (let row = 0; row < size; row++) {
     for (let col = 0; col < size; col++) {
@@ -425,9 +426,8 @@ function drawFloorPlan(
             shapeForLandmark(prop),
           );
         }
-      } else if (occupyMask[row]![col]) {
-        drawSeat(page, cx, cy, cell, palette);
       }
+      // No seat discs drawn — OPEN-MAJORITY grammar removes them entirely
     }
   }
 }
@@ -874,41 +874,28 @@ export function drawPuzzlePage(
     color: palette.accent,
   });
 
-  // ---- The board key, right-aligned on the label's row ----
+  // ---- The board key (COMPLETE LEGEND) — right-aligned on the label's row ----
   //
-  // Drawn with the puzzle's REAL furniture rather than an abstract mark:
-  // the reader is about to look for these exact shapes on the plan, and
-  // when an art pack is loaded these are the same drawings the plan
-  // itself uses. Up to three, because one is a poor sample of what the
-  // board holds and four crowds the row.
-  const propNames = [...new Set(puzzle.floorPlan.landmarks.map((l) => l.name))].slice(0, 3);
-  const openLabel = "OPEN";
-  const blockedLabel = "BLOCKED";
-  const keyWidth =
-    keyIcon +
-    keyGap +
-    fonts.displayBold.widthOfTextAtSize(openLabel, keySize) +
-    (propNames.length > 0
-      ? 11 +
-        propNames.length * (keyIcon + 1.5) +
-        keyGap +
-        fonts.displayBold.widthOfTextAtSize(blockedLabel, keySize)
-      : 0);
-  // If the key cannot fit beside the label it loses its furniture samples
-  // one at a time rather than overrunning the label — the failure mode
-  // the old legend had, and the one a reader actually notices.
+  // SHIGAI GRAMMAR ADOPTION v1: COMPLETE legend listing EVERY prop on the board.
+  // CAN OCCUPY ✅ = floor cells (no seat disc icon needed — all cells are open by default)
+  // BLOCKED ❌ = every prop/landmark name listed explicitly
+  const allPropNames = [...new Set(puzzle.floorPlan.landmarks.map((l) => l.name))];
+  const openLabel = "CAN OCCUPY ✅";
+  const blockedLabel = "BLOCKED ❌";
+  
+  // Calculate width needed for complete legend
+  const keyIcon = 9;
+  const keyGap = 4;
+  const openWidth = fonts.displayBold.widthOfTextAtSize(openLabel, keySize);
+  const blockedWidth = fonts.displayBold.widthOfTextAtSize(blockedLabel, keySize);
+  const propsWidth = allPropNames.length * (keyIcon + 6);
+  const keyWidth = openWidth + keyGap + propsWidth + keyGap + blockedWidth;
+  
   const labelRight =
     box.x + methodPadX + fonts.displayBold.widthOfTextAtSize("HOW TO SOLVE", keySize) + 12;
-  let keyProps = propNames;
-  let keyW = keyWidth;
-  while (keyProps.length > 0 && right - methodPadX - keyW < labelRight) {
-    keyProps = keyProps.slice(0, -1);
-    keyW -= keyIcon + 1.5;
-  }
-  let keyX = right - methodPadX - keyW;
-
-  drawSeat(page, keyX + keyIcon / 2, headMid, keyIcon, palette);
-  keyX += keyIcon + keyGap;
+  let keyX = right - methodPadX - keyWidth;
+  
+  // CAN OCCUPY ✅ label (no icon — all floor cells are open by default in OPEN-MAJORITY)
   page.drawText(openLabel, {
     x: keyX,
     y: headMid - keySize * 0.36,
@@ -916,8 +903,10 @@ export function drawPuzzlePage(
     font: fonts.displayBold,
     color: palette.inkSoft,
   });
-  keyX += fonts.displayBold.widthOfTextAtSize(openLabel, keySize) + 11;
-  for (const name of keyProps) {
+  keyX += openWidth + keyGap;
+  
+  // List EVERY prop name under BLOCKED ❌
+  for (const name of allPropNames) {
     const propImage = options.art?.props.get(name);
     if (propImage) {
       drawPropImage(page, propImage, keyX + keyIcon / 2, headMid, keyIcon / 0.78);
@@ -934,17 +923,16 @@ export function drawPuzzlePage(
         shapeForLandmark(name),
       );
     }
-    keyX += keyIcon + 1.5;
+    keyX += keyIcon + 6;
   }
-  if (keyProps.length > 0) {
-    page.drawText(blockedLabel, {
-      x: keyX + keyGap - 1.5,
-      y: headMid - keySize * 0.36,
-      size: keySize,
-      font: fonts.displayBold,
-      color: palette.inkSoft,
-    });
-  }
+  
+  page.drawText(blockedLabel, {
+    x: keyX,
+    y: headMid - keySize * 0.36,
+    size: keySize,
+    font: fonts.displayBold,
+    color: palette.inkSoft,
+  });
 
   let stepY = y - methodPadY - headRowH - 4 - methodSize;
   stepLines.forEach((lines, i) => {
